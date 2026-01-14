@@ -30,7 +30,8 @@ const SubmissionModal: React.FC<SubmissionModalProps> = ({
 }) => {
   const [team, setTeam] = useState<Team | null>(null);
 
-  const [placement, setPlacement] = useState<number>(1);
+  // 🚫 NO DEFAULT PLACEMENT
+  const [placement, setPlacement] = useState<number | "">("");
   const [playerKills, setPlayerKills] = useState<string[]>(["", "", ""]);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
@@ -78,24 +79,19 @@ const SubmissionModal: React.FC<SubmissionModalProps> = ({
   // ---------- IMAGE HANDLING ----------
 
   const compress = async (file: File) => {
-    try {
-      const opts = {
-        maxSizeMB: 0.8,
-        maxWidthOrHeight: 1920,
-        useWebWorker: true,
-        fileType: "image/jpeg",
-        initialQuality: 0.85,
-      } as const;
+    const opts = {
+      maxSizeMB: 0.8,
+      maxWidthOrHeight: 1920,
+      useWebWorker: true,
+      fileType: "image/jpeg",
+      initialQuality: 0.85,
+    } as const;
 
-      const compressed = await imageCompression(file, opts);
+    const compressed = await imageCompression(file, opts);
 
-      return new File([compressed], `map_${mapNumber}.jpg`, {
-        type: "image/jpeg",
-      });
-    } catch (e) {
-      console.error("[COMPRESS ERROR]", e);
-      throw e;
-    }
+    return new File([compressed], `map_${mapNumber}.jpg`, {
+      type: "image/jpeg",
+    });
   };
 
   const uploadScoreboard = async (file: File) => {
@@ -109,12 +105,8 @@ const SubmissionModal: React.FC<SubmissionModalProps> = ({
         upsert: false,
       });
 
-    if (error) {
-      console.error("[UPLOAD ERROR]", error, { path });
-      throw error;
-    }
-
-    return path; // relative path inside bucket
+    if (error) throw error;
+    return path;
   };
 
   // ---------- SUBMIT ----------
@@ -124,7 +116,13 @@ const SubmissionModal: React.FC<SubmissionModalProps> = ({
     setErr(null);
 
     try {
-      if (!imageFile) throw new Error("Please upload a scoreboard image.");
+      if (placement === "") {
+        throw new Error("Please enter your placement.");
+      }
+
+      if (!imageFile) {
+        throw new Error("Please upload a scoreboard image.");
+      }
 
       const k1 = Number(playerKills[0] || 0);
       const k2 = Number(playerKills[1] || 0);
@@ -132,34 +130,28 @@ const SubmissionModal: React.FC<SubmissionModalProps> = ({
 
       const compressed = await compress(imageFile);
       const storagePath = await uploadScoreboard(compressed);
-
-      // ✅ Build full public URL
       const publicUrl = SCOREBOARD_PUBLIC_BASE + storagePath;
 
       const payload = {
         tournament_id: tournamentId,
         team_id: teamId,
         map_number: mapNumber,
-        placement,
+        placement, // ✅ guaranteed user-provided
         player1_kills: k1,
         player2_kills: k2,
         player3_kills: k3,
-        scoreboard_image_url: publicUrl, // FULL URL STORED
+        scoreboard_image_url: publicUrl,
         status: "pending",
       };
 
       const { error } = await supabase.from("submissions").insert(payload);
-
-      if (error) {
-        console.error("[DB INSERT ERROR]", error, payload);
-        throw error;
-      }
+      if (error) throw error;
 
       alert("Submitted! Waiting for admin approval.");
 
-      setImageFile(null);
+      setPlacement("");
       setPlayerKills(["", "", ""]);
-      setPlacement(1);
+      setImageFile(null);
 
       if (imagePreview) URL.revokeObjectURL(imagePreview);
       setImagePreview("");
@@ -197,7 +189,9 @@ const SubmissionModal: React.FC<SubmissionModalProps> = ({
             type="number"
             min={1}
             value={placement}
-            onChange={(e) => setPlacement(Number(e.target.value))}
+            onChange={(e) =>
+              setPlacement(e.target.value === "" ? "" : Number(e.target.value))
+            }
             required
           />
 
