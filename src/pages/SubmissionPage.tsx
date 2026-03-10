@@ -157,7 +157,7 @@ const SubmissionPage: React.FC = () => {
       <h2 className="grid-title">Select Map</h2>
 
       <div className="map-grid">
-        {Array.from({ length: 15 }, (_, i) => i + 1).map((mapNumber) => {
+        {Array.from({ length: 20 }, (_, i) => i + 1).map((mapNumber) => {
           const status = getStatus(mapNumber);
           const statusClass = getStatusClass(status);
 
