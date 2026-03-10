@@ -4,7 +4,8 @@ import TourneysPage from './pages/TourneysPage';
 import TeamsPage from './pages/TeamsPage';
 import SubmissionPage from './pages/SubmissionPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
-import BracketPage from './pages/TestPage';
+import EditOldScoresPage from './pages/EditOldScoresPage';
+
 function App() {
   return (
     <Router>
@@ -26,15 +27,14 @@ function App() {
           element={<AdminDashboardPage />}
         />
         <Route
-          path="/bracket"
-          element={<BracketPage />}
+          path="/admin/edit-old-scores"
+          element={<EditOldScoresPage />}
         />
-        /*
         <Route
           path="*"
           element={<Navigate to="/" replace />}
         />
-        
+
       </Routes>
     </Router>
   );

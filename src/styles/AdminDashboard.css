@@ -74,6 +74,23 @@
   transition: var(--transition);
 }
 
+.secondary-button {
+  padding: 0.8rem 1.2rem;
+  background: rgba(15, 15, 26, 0.85);
+  border: 1px solid rgba(110, 142, 251, 0.35);
+  border-radius: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.secondary-button:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-3);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
+}
+
 .refresh-button:hover {
   transform: translateY(-1px);
   box-shadow: 0 14px 30px rgba(110, 142, 251, 0.45);
@@ -162,6 +179,40 @@
   color: var(--accent-3);
 }
 
+.score-input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+  width: 78px;
+  padding: 0.45rem 0.55rem;
+  border-radius: 10px;
+  border: 1px solid rgba(110, 142, 251, 0.35);
+  background: rgba(10, 15, 31, 0.95);
+  color: var(--text-primary);
+  font-weight: 800;
+  font-size: 1.05rem;
+  text-align: center;
+}
+
+.score-input::-webkit-outer-spin-button,
+.score-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.score-input:focus {
+  outline: none;
+  border-color: var(--accent-3);
+  box-shadow: 0 0 0 3px rgba(142, 197, 252, 0.14);
+}
+
+.map-input {
+  width: 78px;
+}
+
+.placement-input {
+  width: 96px;
+}
+
 /* =========================
    ACTION BUTTONS (Approve / Deny)
    ========================= */
@@ -182,6 +233,14 @@
   font-weight: 900;
   cursor: pointer;
   transition: var(--transition);
+}
+
+.approve-btn:disabled,
+.deny-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+  transform: none;
+  box-shadow: none;
 }
 
 .approve-btn {

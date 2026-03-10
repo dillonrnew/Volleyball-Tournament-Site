@@ -1,0 +1,258 @@
+.old-scores-page {
+  min-height: 100vh;
+  padding: 3rem 1.5rem;
+  background:
+    radial-gradient(circle at top, rgba(110, 142, 251, 0.16), transparent 32%),
+    linear-gradient(135deg, #0f0f1a, #1a1a2e 55%, #10213c);
+  color: #e0e0ff;
+}
+
+.old-scores-shell {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 2.5rem;
+  border-radius: 24px;
+  border: 1px solid rgba(110, 142, 251, 0.22);
+  background: rgba(22, 33, 62, 0.94);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.old-scores-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.old-scores-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.old-scores-title {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 900;
+}
+
+.old-scores-subtitle {
+  margin: 0.5rem 0 0;
+  color: #b0c4ff;
+}
+
+.old-scores-back {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.85rem 1.1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(142, 197, 252, 0.3);
+  background: rgba(12, 16, 28, 0.85);
+  color: #e0e0ff;
+  text-decoration: none;
+  font-weight: 800;
+}
+
+.old-scores-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.85rem 1.1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(142, 197, 252, 0.3);
+  background: linear-gradient(90deg, #6e8efb, #8ec5fc);
+  color: #fff;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.old-scores-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 320px));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.old-scores-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.old-scores-field span {
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b0c4ff;
+}
+
+.old-scores-field select {
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(110, 142, 251, 0.28);
+  background: rgba(10, 15, 31, 0.96);
+  color: #e0e0ff;
+  font-size: 1rem;
+}
+
+.old-scores-team-card {
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.2rem;
+  border-radius: 18px;
+  background: rgba(11, 16, 31, 0.6);
+  border: 1px solid rgba(110, 142, 251, 0.18);
+}
+
+.old-scores-team-card h2,
+.old-scores-team-card p {
+  margin: 0;
+}
+
+.old-scores-team-card p {
+  margin-top: 0.35rem;
+  color: #b0c4ff;
+}
+
+.old-scores-error,
+.old-scores-success,
+.old-scores-note {
+  margin: 0 0 1rem;
+  padding: 0.95rem 1rem;
+  border-radius: 14px;
+}
+
+.old-scores-error {
+  background: rgba(127, 29, 29, 0.35);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+
+.old-scores-success {
+  background: rgba(20, 83, 45, 0.3);
+  border: 1px solid rgba(74, 222, 128, 0.28);
+}
+
+.old-scores-note {
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: #cbd5e1;
+}
+
+.old-scores-table-wrap {
+  overflow-x: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(110, 142, 251, 0.18);
+}
+
+.old-scores-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 980px;
+}
+
+.old-scores-table th,
+.old-scores-table td {
+  padding: 1rem 0.85rem;
+  text-align: center;
+  border-bottom: 1px solid rgba(110, 142, 251, 0.12);
+}
+
+.old-scores-table th {
+  background: rgba(14, 20, 36, 0.95);
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  color: #b0c4ff;
+}
+
+.old-scores-table tbody tr:nth-child(even) {
+  background: rgba(110, 142, 251, 0.04);
+}
+
+.old-score-input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+  width: 88px;
+  padding: 0.55rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid rgba(110, 142, 251, 0.28);
+  background: rgba(10, 15, 31, 0.95);
+  color: #e0e0ff;
+  font-size: 1.02rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.old-score-input::-webkit-outer-spin-button,
+.old-score-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.old-score-placement {
+  width: 96px;
+}
+
+.old-score-status {
+  display: inline-flex;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.old-score-status-approved,
+.old-score-status-exported {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+}
+
+.old-score-status-pending {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcd34d;
+}
+
+.old-score-status-rejected {
+  background: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
+}
+
+.old-score-link {
+  color: #8ec5fc;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.old-score-muted {
+  color: #94a3b8;
+}
+
+.old-score-save {
+  padding: 0.7rem 1rem;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #16a34a, #22c55e);
+  color: white;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.old-score-save:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+@media (max-width: 900px) {
+  .old-scores-header {
+    flex-direction: column;
+  }
+
+  .old-scores-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .old-scores-shell {
+    padding: 1.5rem;
+  }
+}
