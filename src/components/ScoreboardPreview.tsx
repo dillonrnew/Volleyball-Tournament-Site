@@ -8,7 +8,7 @@ interface ScoreboardPreviewProps {
 const ScoreboardPreview: React.FC<ScoreboardPreviewProps> = ({ imageUrl }) => {
   return (
     <div className="scoreboard-preview">
-      <img src={`https://cszyqguhwvxnkozuyldj.supabase.co/storage/v1/object/public/scoreboards/${imageUrl}`} alt="Scoreboard Preview" />
+      <img src={`https://atxjzodlczvrybtejvsn.supabase.co/storage/v1/object/public/scoreboards/${imageUrl}`} alt="Scoreboard Preview" />
     </div>
   );
 };

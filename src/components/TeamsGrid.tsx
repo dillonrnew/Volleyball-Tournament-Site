@@ -12,6 +12,7 @@ type Team = {
   player1_name: string;
   player2_name: string;
   player3_name: string;
+  player4_name: string;
   created_at: string;
 };
 
@@ -19,26 +20,16 @@ type TeamsGridProps = {
   tournamentId: string;
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 const TeamsGrid: React.FC<TeamsGridProps> = ({ tournamentId }) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // UUID validation regex
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const hasValidTournamentId = Boolean(tournamentId) && UUID_REGEX.test(tournamentId);
 
   useEffect(() => {
-    if (!tournamentId) {
-      setTeams([]);
-      setErrorMsg('Invalid tournament id.');
-      setLoading(false);
-      return;
-    }
-
-    if (!uuidRegex.test(tournamentId)) {
-      setTeams([]);
-      setErrorMsg('Invalid tournament id.');
-      setLoading(false);
+    if (!hasValidTournamentId) {
       return;
     }
 
@@ -66,7 +57,7 @@ const TeamsGrid: React.FC<TeamsGridProps> = ({ tournamentId }) => {
 
         setTeams((data ?? []) as Team[]);
         setLoading(false);
-      } catch (err) {
+      } catch {
         if (!isMounted) return;
         setTeams([]);
         setErrorMsg('Unexpected error fetching teams.');
@@ -79,13 +70,15 @@ const TeamsGrid: React.FC<TeamsGridProps> = ({ tournamentId }) => {
     return () => {
       isMounted = false;
     };
-  }, [tournamentId]);
+  }, [hasValidTournamentId, tournamentId]);
 
   return (
     <div className="teams-grid-container">
       <h1 className="grid-title">Select Your Team</h1>
 
-      {loading ? (
+      {!hasValidTournamentId ? (
+        <p>Invalid tournament id.</p>
+      ) : loading ? (
         <p>Loading teams...</p>
       ) : errorMsg ? (
         <p>{errorMsg}</p>

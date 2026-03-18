@@ -17,10 +17,11 @@ type Team = {
   player1_name: string;
   player2_name: string;
   player3_name: string;
+  player4_name: string;
 };
 
 const SCOREBOARD_PUBLIC_BASE =
-  "https://cszyqguhwvxnkozuyldj.supabase.co/storage/v1/object/public/scoreboards/";
+  "https://atxjzodlczvrybtejvsn.supabase.co/storage/v1/object/public/scoreboards/";
 
 const SubmissionModal: React.FC<SubmissionModalProps> = ({
   teamId,
@@ -32,7 +33,7 @@ const SubmissionModal: React.FC<SubmissionModalProps> = ({
 
   // 🚫 NO DEFAULT PLACEMENT
   const [placement, setPlacement] = useState<number | "">("");
-  const [playerKills, setPlayerKills] = useState<string[]>(["", "", ""]);
+  const [playerKills, setPlayerKills] = useState<string[]>(["", "", "", ""]);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
@@ -48,7 +49,7 @@ const SubmissionModal: React.FC<SubmissionModalProps> = ({
 
       const { data, error } = await supabase
         .from("teams")
-        .select("id,name,player1_name,player2_name,player3_name")
+        .select("id,name,player1_name,player2_name,player3_name,player4_name")
         .eq("id", teamId)
         .single();
 
@@ -127,6 +128,7 @@ const SubmissionModal: React.FC<SubmissionModalProps> = ({
       const k1 = Number(playerKills[0] || 0);
       const k2 = Number(playerKills[1] || 0);
       const k3 = Number(playerKills[2] || 0);
+      const k4 = Number(playerKills[3] || 0);
 
       const compressed = await compress(imageFile);
       const storagePath = await uploadScoreboard(compressed);
@@ -140,6 +142,7 @@ const SubmissionModal: React.FC<SubmissionModalProps> = ({
         player1_kills: k1,
         player2_kills: k2,
         player3_kills: k3,
+        player4_kills: k4,
         scoreboard_image_url: publicUrl,
         status: "pending",
       };
@@ -150,16 +153,16 @@ const SubmissionModal: React.FC<SubmissionModalProps> = ({
       alert("Submitted! Waiting for admin approval.");
 
       setPlacement("");
-      setPlayerKills(["", "", ""]);
+      setPlayerKills(["", "", "", ""]);
       setImageFile(null);
 
       if (imagePreview) URL.revokeObjectURL(imagePreview);
       setImagePreview("");
 
       onClose();
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("[SUBMIT FAILED]", e);
-      setErr(e?.message ?? "Failed to submit.");
+      setErr(e instanceof Error ? e.message : "Failed to submit.");
     } finally {
       setSubmitting(false);
     }
@@ -174,90 +177,102 @@ const SubmissionModal: React.FC<SubmissionModalProps> = ({
           ✕
         </button>
 
-        <h3 className="modal-subtitle">Submit Score for Map {mapNumber}</h3>
+        <div className="modal-header">
+          <h3 className="modal-subtitle">Submit Score for Map {mapNumber}</h3>
+          <p className="modal-helper">
+            Add placement, enter each player&apos;s kills, and upload or paste a
+            scoreboard screenshot.
+          </p>
+        </div>
 
-        {err && <div style={{ color: "#ffb4b4" }}>{err}</div>}
+        {err && <div className="modal-error">{err}</div>}
 
         <form
+          className="modal-form"
           onSubmit={(e) => {
             e.preventDefault();
             submit();
           }}
         >
-          <label>Placement</label>
-          <input
-            type="number"
-            min={1}
-            value={placement}
-            onChange={(e) =>
-              setPlacement(e.target.value === "" ? "" : Number(e.target.value))
-            }
-            required
-          />
+          <div className="modal-form-body">
+            <label>Placement</label>
+            <input
+              type="number"
+              min={1}
+              value={placement}
+              onChange={(e) =>
+                setPlacement(e.target.value === "" ? "" : Number(e.target.value))
+              }
+              required
+            />
 
-          <div className="kills-section">
-            {[team.player1_name, team.player2_name, team.player3_name].map(
-              (p, idx) => (
-                <div key={idx} className="kills-input-group">
-                  <label>{p} Kills</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={playerKills[idx]}
-                    onChange={(e) =>
-                      setPlayerKills((prev) => {
-                        const copy = [...prev];
-                        copy[idx] = e.target.value;
-                        return copy;
-                      })
-                    }
-                    required
-                  />
-                </div>
-              )
+            <div className="kills-section">
+              {[team.player1_name, team.player2_name, team.player3_name, team.player4_name].map(
+                (p, idx) => (
+                  <div key={idx} className="kills-input-group">
+                    <label>{p} Kills</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={playerKills[idx]}
+                      onChange={(e) =>
+                        setPlayerKills((prev) => {
+                          const copy = [...prev];
+                          copy[idx] = e.target.value;
+                          return copy;
+                        })
+                      }
+                      required
+                    />
+                  </div>
+                )
+              )}
+            </div>
+
+            <label>Scoreboard Image</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const compressed = await compress(file);
+                setImageFile(compressed);
+                setPreviewFromFile(compressed);
+                e.target.value = "";
+              }}
+            />
+
+            <textarea
+              ref={pasteRef}
+              className="paste-area"
+              placeholder="Or tap here and paste a screenshot"
+              onPaste={async (e) => {
+                for (const item of e.clipboardData.items) {
+                  if (item.type.startsWith("image/")) {
+                    const file = item.getAsFile();
+                    if (!file) return;
+                    e.preventDefault();
+                    const compressed = await compress(file);
+                    setImageFile(compressed);
+                    setPreviewFromFile(compressed);
+                  }
+                }
+              }}
+            />
+
+            {imagePreview && (
+              <div className="preview-container">
+                <img src={imagePreview} alt="Scoreboard preview" />
+              </div>
             )}
           </div>
 
-          <label>Scoreboard Image</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const compressed = await compress(file);
-              setImageFile(compressed);
-              setPreviewFromFile(compressed);
-              e.target.value = "";
-            }}
-          />
-
-          <textarea
-            ref={pasteRef}
-            placeholder="Paste screenshot here"
-            onPaste={async (e) => {
-              for (const item of e.clipboardData.items) {
-                if (item.type.startsWith("image/")) {
-                  const file = item.getAsFile();
-                  if (!file) return;
-                  e.preventDefault();
-                  const compressed = await compress(file);
-                  setImageFile(compressed);
-                  setPreviewFromFile(compressed);
-                }
-              }
-            }}
-          />
-
-          {imagePreview && (
-            <div className="preview-container">
-              <img src={imagePreview} alt="Scoreboard preview" />
-            </div>
-          )}
-
-          <button type="submit" disabled={submitting}>
-            {submitting ? "Submitting..." : "Submit Score"}
-          </button>
+          <div className="modal-actions">
+            <button type="submit" disabled={submitting}>
+              {submitting ? "Submitting..." : "Submit Score"}
+            </button>
+          </div>
         </form>
       </div>
     </div>

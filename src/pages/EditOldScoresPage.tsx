@@ -16,6 +16,7 @@ type Team = {
   player1_name: string | null;
   player2_name: string | null;
   player3_name: string | null;
+  player4_name: string | null;
 };
 
 type Submission = {
@@ -26,6 +27,7 @@ type Submission = {
   player1_kills: number;
   player2_kills: number;
   player3_kills: number;
+  player4_kills: number;
   placement: number | null;
   scoreboard_image_url: string | null;
   status: string;
@@ -36,6 +38,7 @@ type EditableSubmissionValues = {
   player1_kills: string;
   player2_kills: string;
   player3_kills: string;
+  player4_kills: string;
   placement: string;
 };
 
@@ -44,6 +47,7 @@ const emptyEditableValues: EditableSubmissionValues = {
   player1_kills: '',
   player2_kills: '',
   player3_kills: '',
+  player4_kills: '',
   placement: '',
 };
 
@@ -53,6 +57,7 @@ function buildEditableValues(submission: Submission): EditableSubmissionValues {
     player1_kills: String(submission.player1_kills),
     player2_kills: String(submission.player2_kills),
     player3_kills: String(submission.player3_kills),
+    player4_kills: String(submission.player4_kills),
     placement: submission.placement === null ? '' : String(submission.placement),
   };
 }
@@ -106,7 +111,7 @@ const EditOldScoresPage: React.FC = () => {
 
     const { data, error } = await supabase
       .from('teams')
-      .select('id,team_number,name,player1_name,player2_name,player3_name')
+      .select('id,team_number,name,player1_name,player2_name,player3_name,player4_name')
       .eq('tournament_id', tournamentId)
       .order('team_number', { ascending: true });
 
@@ -130,7 +135,7 @@ const EditOldScoresPage: React.FC = () => {
     const { data, error } = await supabase
       .from('submissions')
       .select(
-        'id,tournament_id,team_id,map_number,player1_kills,player2_kills,player3_kills,placement,scoreboard_image_url,status'
+        'id,tournament_id,team_id,map_number,player1_kills,player2_kills,player3_kills,player4_kills,placement,scoreboard_image_url,status'
       )
       .eq('tournament_id', tournamentId)
       .eq('team_id', teamId)
@@ -230,6 +235,7 @@ const EditOldScoresPage: React.FC = () => {
         player1_kills: parseWholeNumber(draft.player1_kills, 'Player 1 kills', 0),
         player2_kills: parseWholeNumber(draft.player2_kills, 'Player 2 kills', 0),
         player3_kills: parseWholeNumber(draft.player3_kills, 'Player 3 kills', 0),
+        player4_kills: parseWholeNumber(draft.player4_kills, 'Player 4 kills', 0),
         placement: parseWholeNumber(draft.placement, 'Placement', 1),
         scoreboard_image_url: submission.scoreboard_image_url,
         status: 'approved',
@@ -239,7 +245,7 @@ const EditOldScoresPage: React.FC = () => {
         .from('submissions')
         .upsert(payload, { onConflict: 'id' })
         .select(
-          'id,tournament_id,team_id,map_number,player1_kills,player2_kills,player3_kills,placement,scoreboard_image_url,status'
+          'id,tournament_id,team_id,map_number,player1_kills,player2_kills,player3_kills,player4_kills,placement,scoreboard_image_url,status'
         )
         .single();
 
@@ -335,7 +341,7 @@ const EditOldScoresPage: React.FC = () => {
             </h2>
             <p>
               {selectedTeam.player1_name ?? ''} / {selectedTeam.player2_name ?? ''} /{' '}
-              {selectedTeam.player3_name ?? ''}
+              {selectedTeam.player3_name ?? ''} / {selectedTeam.player4_name ?? ''}
             </p>
           </div>
         )}
@@ -357,6 +363,7 @@ const EditOldScoresPage: React.FC = () => {
                   <th>{selectedTeam?.player1_name ?? 'Player 1'}</th>
                   <th>{selectedTeam?.player2_name ?? 'Player 2'}</th>
                   <th>{selectedTeam?.player3_name ?? 'Player 3'}</th>
+                  <th>{selectedTeam?.player4_name ?? 'Player 4'}</th>
                   <th>Placement</th>
                   <th>Status</th>
                   <th>Scoreboard</th>
@@ -407,6 +414,17 @@ const EditOldScoresPage: React.FC = () => {
                         value={editableValues[submission.id]?.player3_kills ?? ''}
                         onChange={(e) =>
                           updateEditableValue(submission.id, 'player3_kills', e.target.value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="old-score-input"
+                        type="number"
+                        min={0}
+                        value={editableValues[submission.id]?.player4_kills ?? ''}
+                        onChange={(e) =>
+                          updateEditableValue(submission.id, 'player4_kills', e.target.value)
                         }
                       />
                     </td>

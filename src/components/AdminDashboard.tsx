@@ -9,6 +9,7 @@ type TeamJoinRow = {
   player1_name: string | null;
   player2_name: string | null;
   player3_name: string | null;
+  player4_name: string | null;
 };
 
 type TeamJoinShape = TeamJoinRow[] | TeamJoinRow | null;
@@ -21,6 +22,7 @@ type SubmissionRow = {
   player1_kills: number;
   player2_kills: number;
   player3_kills: number;
+  player4_kills: number;
   placement: number | null;
   scoreboard_image_url: string | null;
   status: string;
@@ -35,6 +37,7 @@ type Submission = {
   player1_kills: number;
   player2_kills: number;
   player3_kills: number;
+  player4_kills: number;
   placement: number | null;
   scoreboard_image_url: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'exported';
@@ -42,6 +45,7 @@ type Submission = {
     player1_name: string;
     player2_name: string;
     player3_name: string;
+    player4_name: string;
   };
 };
 
@@ -50,6 +54,7 @@ type EditableSubmissionValues = {
   player1_kills: string;
   player2_kills: string;
   player3_kills: string;
+  player4_kills: string;
   placement: string;
 };
 
@@ -71,6 +76,7 @@ function buildEditableValues(submission: Submission): EditableSubmissionValues {
     player1_kills: String(submission.player1_kills),
     player2_kills: String(submission.player2_kills),
     player3_kills: String(submission.player3_kills),
+    player4_kills: String(submission.player4_kills),
     placement: submission.placement === null ? '' : String(submission.placement),
   };
 }
@@ -80,6 +86,7 @@ const emptyEditableValues: EditableSubmissionValues = {
   player1_kills: '',
   player2_kills: '',
   player3_kills: '',
+  player4_kills: '',
   placement: '',
 };
 
@@ -102,13 +109,15 @@ const AdminDashboard: React.FC = () => {
         player1_kills,
         player2_kills,
         player3_kills,
+        player4_kills,
         placement,
         scoreboard_image_url,
         status,
         team:teams!submissions_team_id_fkey (
           player1_name,
           player2_name,
-          player3_name
+          player3_name,
+          player4_name
         )
       `
       )
@@ -135,6 +144,7 @@ const AdminDashboard: React.FC = () => {
         player1_kills: r.player1_kills,
         player2_kills: r.player2_kills,
         player3_kills: r.player3_kills,
+        player4_kills: r.player4_kills,
         placement: r.placement,
         scoreboard_image_url: r.scoreboard_image_url,
         status: normalizeStatus(r.status),
@@ -143,6 +153,7 @@ const AdminDashboard: React.FC = () => {
               player1_name: t0.player1_name ?? '',
               player2_name: t0.player2_name ?? '',
               player3_name: t0.player3_name ?? '',
+              player4_name: t0.player4_name ?? '',
             }
           : undefined,
       };
@@ -214,6 +225,7 @@ const AdminDashboard: React.FC = () => {
           player1_kills: parseNonNegativeInteger(draft.player1_kills, 'Player 1 kills'),
           player2_kills: parseNonNegativeInteger(draft.player2_kills, 'Player 2 kills'),
           player3_kills: parseNonNegativeInteger(draft.player3_kills, 'Player 3 kills'),
+          player4_kills: parseNonNegativeInteger(draft.player4_kills, 'Player 4 kills'),
           placement: parsePlacement(draft.placement),
           scoreboard_image_url: submission.scoreboard_image_url,
           status: 'approved' as const,
@@ -331,6 +343,16 @@ const AdminDashboard: React.FC = () => {
                           min={0}
                           value={editableValues[s.id]?.player3_kills ?? ''}
                           onChange={(e) => updateEditableValue(s.id, 'player3_kills', e.target.value)}
+                        />
+                      </div>
+                      <div className="player-line">
+                        <span className="player-name">{s.teams?.player4_name ?? ''}</span>
+                        <input
+                          className="score-input"
+                          type="number"
+                          min={0}
+                          value={editableValues[s.id]?.player4_kills ?? ''}
+                          onChange={(e) => updateEditableValue(s.id, 'player4_kills', e.target.value)}
                         />
                       </div>
                     </div>

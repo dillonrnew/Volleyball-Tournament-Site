@@ -10,6 +10,7 @@ interface TeamCardProps {
     player1_name: string;
     player2_name: string;
     player3_name: string;
+    player4_name: string;
   };
 }
 
@@ -26,6 +27,7 @@ const TeamCard: React.FC<TeamCardProps> = ({ team }) => {
             <div>{team.player1_name}</div>
             <div>{team.player2_name}</div>
             <div>{team.player3_name}</div>
+            <div>{team.player4_name}</div>
           </div>
         </div>
       </Link>
