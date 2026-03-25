@@ -76,6 +76,12 @@
   margin-bottom: 1rem;
 }
 
+.subheader-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .field {
   display: grid;
   gap: 0.45rem;
@@ -100,6 +106,41 @@
 .field input:focus {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+.field input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.lock-button {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  padding: 0.5rem 0.9rem;
+  background: var(--color-bg-input);
+  color: var(--color-text-strong);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.lock-button:hover {
+  border-color: var(--color-accent-strong);
+}
+
+.lock-button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.lock-button.locked {
+  border-color: var(--color-accent-strong);
+  background: linear-gradient(135deg, var(--color-accent-soft), var(--color-secondary-soft));
 }
 
 .match-stack {
@@ -549,6 +590,11 @@
 	.bracket-report-row {
 	  grid-template-columns: 1fr;
 	}
+
+  .subheader-actions {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
 
   .bracket-report-team:last-child {
     text-align: left;

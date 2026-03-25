@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 type Team = {
@@ -50,13 +50,15 @@ type SeededTeam = PoolStanding & {
 
 type PersistedState = {
   teams: Record<PoolKey, Team[]>
+  lockedPools: Record<PoolKey, boolean>
   poolMatches: Record<PoolKey, PoolMatch[]>
   bracketMatches: Match[]
 }
 
 const bracketScoreOptions = ['0', '1', '2'] as const
 const storageKey = 'volleyball-bracket-state'
-const bracketRefreshIntervalMs = 15000
+const sharedStateEndpoint = '/.netlify/functions/tournament-state'
+const sharedRefreshIntervalMs = 15000
 
 const initialTeams: Record<PoolKey, Team[]> = {
   poolA: [
@@ -69,6 +71,11 @@ const initialTeams: Record<PoolKey, Team[]> = {
     { id: 'b2', name: 'Pool B Team 2' },
     { id: 'b3', name: 'Pool B Team 3' },
   ],
+}
+
+const initialLockedPools: Record<PoolKey, boolean> = {
+  poolA: false,
+  poolB: false,
 }
 
 const initialPoolMatches: Record<PoolKey, PoolMatch[]> = {
@@ -255,6 +262,19 @@ function isPoolMatchComplete(match: PoolMatch) {
   })
 }
 
+function normalizePersistedState(parsed: Partial<PersistedState>): PersistedState | null {
+  if (!parsed.teams || !parsed.poolMatches || !parsed.bracketMatches) {
+    return null
+  }
+
+  return {
+    teams: parsed.teams as Record<PoolKey, Team[]>,
+    lockedPools: (parsed.lockedPools as Record<PoolKey, boolean>) ?? initialLockedPools,
+    poolMatches: parsed.poolMatches as Record<PoolKey, PoolMatch[]>,
+    bracketMatches: parsed.bracketMatches as Match[],
+  }
+}
+
 function readPersistedState(): PersistedState | null {
   if (typeof window === 'undefined') {
     return null
@@ -268,30 +288,72 @@ function readPersistedState(): PersistedState | null {
     }
 
     const parsed = JSON.parse(rawValue) as Partial<PersistedState>
-
-    if (!parsed.teams || !parsed.poolMatches || !parsed.bracketMatches) {
-      return null
-    }
-
-    return {
-      teams: parsed.teams as Record<PoolKey, Team[]>,
-      poolMatches: parsed.poolMatches as Record<PoolKey, PoolMatch[]>,
-      bracketMatches: parsed.bracketMatches as Match[],
-    }
+    return normalizePersistedState(parsed)
   } catch {
     return null
   }
 }
 
+async function readSharedState(): Promise<{
+  available: boolean
+  state: PersistedState | null
+}> {
+  try {
+    const response = await fetch(sharedStateEndpoint, {
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    })
+
+    if (!response.ok) {
+      return { available: false, state: null }
+    }
+
+    const parsed = (await response.json()) as Partial<PersistedState> | null
+
+    return {
+      available: true,
+      state: parsed ? normalizePersistedState(parsed) : null,
+    }
+  } catch {
+    return { available: false, state: null }
+  }
+}
+
+async function writeSharedState(state: PersistedState) {
+  const response = await fetch(sharedStateEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(state),
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to write shared tournament state')
+  }
+}
+
 function App() {
+  const persistedState = readPersistedState()
   const [activePage, setActivePage] = useState<'reporting' | 'bracket'>(getPageFromHash)
-  const [teams, setTeams] = useState(() => readPersistedState()?.teams ?? initialTeams)
+  const [teams, setTeams] = useState(() => persistedState?.teams ?? initialTeams)
+  const [lockedPools, setLockedPools] = useState(
+    () => persistedState?.lockedPools ?? initialLockedPools,
+  )
   const [poolMatches, setPoolMatches] = useState(
-    () => readPersistedState()?.poolMatches ?? initialPoolMatches,
+    () => persistedState?.poolMatches ?? initialPoolMatches,
   )
   const [bracketMatches, setBracketMatches] = useState(
-    () => readPersistedState()?.bracketMatches ?? initialBracketMatches,
+    () => persistedState?.bracketMatches ?? initialBracketMatches,
   )
+  const [sharedSyncEnabled, setSharedSyncEnabled] = useState(false)
+  const [sharedStateReady, setSharedStateReady] = useState(false)
+  const lastSyncedStateRef = useRef<string | null>(null)
+
+  function applyPersistedState(state: PersistedState) {
+    setTeams(state.teams)
+    setLockedPools(state.lockedPools)
+    setPoolMatches(state.poolMatches)
+    setBracketMatches(state.bracketMatches)
+  }
 
   useEffect(() => {
     function handleHashChange() {
@@ -305,12 +367,57 @@ function App() {
   useEffect(() => {
     const persistedState: PersistedState = {
       teams,
+      lockedPools,
       poolMatches,
       bracketMatches,
     }
 
-    window.localStorage.setItem(storageKey, JSON.stringify(persistedState))
-  }, [bracketMatches, poolMatches, teams])
+    const serializedState = JSON.stringify(persistedState)
+
+    window.localStorage.setItem(storageKey, serializedState)
+
+    if (serializedState === lastSyncedStateRef.current) {
+      return
+    }
+
+    lastSyncedStateRef.current = serializedState
+
+    if (!sharedStateReady || !sharedSyncEnabled) {
+      return
+    }
+
+    void writeSharedState(persistedState).catch(() => {
+      setSharedSyncEnabled(false)
+    })
+  }, [bracketMatches, lockedPools, poolMatches, sharedStateReady, sharedSyncEnabled, teams])
+
+  useEffect(() => {
+    let isActive = true
+
+    async function hydrateSharedState() {
+      const result = await readSharedState()
+
+      if (!isActive) {
+        return
+      }
+
+      setSharedSyncEnabled(result.available)
+      setSharedStateReady(true)
+
+      if (!result.state) {
+        return
+      }
+
+      lastSyncedStateRef.current = JSON.stringify(result.state)
+      applyPersistedState(result.state)
+    }
+
+    void hydrateSharedState()
+
+    return () => {
+      isActive = false
+    }
+  }, [])
 
   useEffect(() => {
     function syncFromStorage() {
@@ -320,9 +427,8 @@ function App() {
         return
       }
 
-      setTeams(persistedState.teams)
-      setPoolMatches(persistedState.poolMatches)
-      setBracketMatches(persistedState.bracketMatches)
+      lastSyncedStateRef.current = JSON.stringify(persistedState)
+      applyPersistedState(persistedState)
     }
 
     function handleStorage(event: StorageEvent) {
@@ -335,17 +441,37 @@ function App() {
 
     window.addEventListener('storage', handleStorage)
 
-    if (activePage !== 'bracket') {
+    if (!sharedSyncEnabled) {
       return () => window.removeEventListener('storage', handleStorage)
     }
 
-    const intervalId = window.setInterval(syncFromStorage, bracketRefreshIntervalMs)
+    const intervalId = window.setInterval(() => {
+      void readSharedState().then((result) => {
+        if (!result.available) {
+          setSharedSyncEnabled(false)
+          return
+        }
+
+        if (!result.state) {
+          return
+        }
+
+        const serializedState = JSON.stringify(result.state)
+
+        if (serializedState === lastSyncedStateRef.current) {
+          return
+        }
+
+        lastSyncedStateRef.current = serializedState
+        applyPersistedState(result.state)
+      })
+    }, sharedRefreshIntervalMs)
 
     return () => {
       window.removeEventListener('storage', handleStorage)
       window.clearInterval(intervalId)
     }
-  }, [activePage])
+  }, [sharedSyncEnabled])
 
   const poolStandings = useMemo(() => {
     const entries = Object.entries(teams) as [PoolKey, Team[]][]
@@ -534,11 +660,22 @@ function App() {
   }, [bracketContext, bracketMatches])
 
   function updateTeamName(poolKey: PoolKey, teamId: string, name: string) {
+    if (lockedPools[poolKey]) {
+      return
+    }
+
     setTeams((current) => ({
       ...current,
       [poolKey]: current[poolKey].map((team) =>
         team.id === teamId ? { ...team, name } : team,
       ),
+    }))
+  }
+
+  function togglePoolLock(poolKey: PoolKey) {
+    setLockedPools((current) => ({
+      ...current,
+      [poolKey]: !current[poolKey],
     }))
   }
 
@@ -595,7 +732,17 @@ function App() {
                 <section className="pool-card" key={poolKey}>
                   <div className="subheader">
                     <h3>{poolKey === 'poolA' ? 'Pool A' : 'Pool B'}</h3>
-                    <span>3 teams</span>
+                    <div className="subheader-actions">
+                      <span>3 teams</span>
+                      <button
+                        type="button"
+                        className={`lock-button${lockedPools[poolKey] ? ' locked' : ''}`}
+                        onClick={() => togglePoolLock(poolKey)}
+                        aria-pressed={lockedPools[poolKey]}
+                      >
+                        {lockedPools[poolKey] ? 'Unlock Names' : 'Lock Names'}
+                      </button>
+                    </div>
                   </div>
                   <div className="team-fields">
                     {teams[poolKey].map((team) => (
@@ -604,6 +751,7 @@ function App() {
                         <input
                           type="text"
                           value={team.name}
+                          disabled={lockedPools[poolKey]}
                           onChange={(event) =>
                             updateTeamName(poolKey, team.id, event.target.value)
                           }
