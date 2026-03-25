@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import { supabase, supabaseEnabled } from './supabaseClient'
 
 type Team = {
   id: string
@@ -56,9 +57,9 @@ type PersistedState = {
 }
 
 const bracketScoreOptions = ['0', '1', '2'] as const
-const storageKey = 'volleyball-bracket-state'
-const sharedStateEndpoint = '/.netlify/functions/tournament-state'
+const scoreSyncDebounceMs = 700
 const sharedRefreshIntervalMs = 15000
+const tournamentRowId = 'current'
 
 const initialTeams: Record<PoolKey, Team[]> = {
   poolA: [
@@ -275,44 +276,34 @@ function normalizePersistedState(parsed: Partial<PersistedState>): PersistedStat
   }
 }
 
-function readPersistedState(): PersistedState | null {
-  if (typeof window === 'undefined') {
-    return null
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(storageKey)
-
-    if (!rawValue) {
-      return null
-    }
-
-    const parsed = JSON.parse(rawValue) as Partial<PersistedState>
-    return normalizePersistedState(parsed)
-  } catch {
-    return null
-  }
-}
-
 async function readSharedState(): Promise<{
   available: boolean
   state: PersistedState | null
 }> {
-  try {
-    const response = await fetch(sharedStateEndpoint, {
-      cache: 'no-store',
-      headers: { Accept: 'application/json' },
-    })
+  if (!supabaseEnabled || !supabase) {
+    console.warn('[supabase-sync] Supabase env vars are missing; shared sync disabled.')
+    return { available: false, state: null }
+  }
 
-    if (!response.ok) {
+  try {
+    const { data, error } = await supabase
+      .from('tournament_state')
+      .select('state')
+      .eq('id', tournamentRowId)
+      .maybeSingle()
+
+    if (error) {
+      console.error('[supabase-sync] Failed to read shared state.', error)
       return { available: false, state: null }
     }
 
-    const parsed = (await response.json()) as Partial<PersistedState> | null
+    console.info(
+      `[supabase-sync] Read shared state ${data?.state ? 'successfully' : 'with no saved row yet'}.`,
+    )
 
     return {
       available: true,
-      state: parsed ? normalizePersistedState(parsed) : null,
+      state: data?.state ? normalizePersistedState(data.state as Partial<PersistedState>) : null,
     }
   } catch {
     return { available: false, state: null }
@@ -320,39 +311,52 @@ async function readSharedState(): Promise<{
 }
 
 async function writeSharedState(state: PersistedState) {
-  const response = await fetch(sharedStateEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(state),
-  })
+  if (!supabaseEnabled || !supabase) {
+    throw new Error('Supabase is not configured')
+  }
 
-  if (!response.ok) {
+  const { error } = await supabase.from('tournament_state').upsert(
+    {
+      id: tournamentRowId,
+      state,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      onConflict: 'id',
+    },
+  )
+
+  if (error) {
+    console.error('[supabase-sync] Failed to write shared state.', error)
     throw new Error('Failed to write shared tournament state')
   }
+
+  console.info('[supabase-sync] Wrote tournament update to Supabase.', {
+    updatedAt: new Date().toISOString(),
+  })
 }
 
 function App() {
-  const persistedState = readPersistedState()
   const [activePage, setActivePage] = useState<'reporting' | 'bracket'>(getPageFromHash)
-  const [teams, setTeams] = useState(() => persistedState?.teams ?? initialTeams)
-  const [lockedPools, setLockedPools] = useState(
-    () => persistedState?.lockedPools ?? initialLockedPools,
-  )
-  const [poolMatches, setPoolMatches] = useState(
-    () => persistedState?.poolMatches ?? initialPoolMatches,
-  )
-  const [bracketMatches, setBracketMatches] = useState(
-    () => persistedState?.bracketMatches ?? initialBracketMatches,
-  )
+  const [teams, setTeams] = useState(initialTeams)
+  const [draftTeams, setDraftTeams] = useState(initialTeams)
+  const [lockedPools, setLockedPools] = useState(initialLockedPools)
+  const [poolMatches, setPoolMatches] = useState(initialPoolMatches)
+  const [bracketMatches, setBracketMatches] = useState(initialBracketMatches)
+  const [debouncedPoolMatches, setDebouncedPoolMatches] = useState(initialPoolMatches)
+  const [debouncedBracketMatches, setDebouncedBracketMatches] = useState(initialBracketMatches)
   const [sharedSyncEnabled, setSharedSyncEnabled] = useState(false)
   const [sharedStateReady, setSharedStateReady] = useState(false)
   const lastSyncedStateRef = useRef<string | null>(null)
 
   function applyPersistedState(state: PersistedState) {
     setTeams(state.teams)
+    setDraftTeams(state.teams)
     setLockedPools(state.lockedPools)
     setPoolMatches(state.poolMatches)
     setBracketMatches(state.bracketMatches)
+    setDebouncedPoolMatches(state.poolMatches)
+    setDebouncedBracketMatches(state.bracketMatches)
   }
 
   useEffect(() => {
@@ -365,16 +369,30 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const persistedState: PersistedState = {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedPoolMatches(poolMatches)
+    }, scoreSyncDebounceMs)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [poolMatches])
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedBracketMatches(bracketMatches)
+    }, scoreSyncDebounceMs)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [bracketMatches])
+
+  useEffect(() => {
+    const nextState: PersistedState = {
       teams,
       lockedPools,
-      poolMatches,
-      bracketMatches,
+      poolMatches: debouncedPoolMatches,
+      bracketMatches: debouncedBracketMatches,
     }
 
-    const serializedState = JSON.stringify(persistedState)
-
-    window.localStorage.setItem(storageKey, serializedState)
+    const serializedState = JSON.stringify(nextState)
 
     if (serializedState === lastSyncedStateRef.current) {
       return
@@ -386,10 +404,18 @@ function App() {
       return
     }
 
-    void writeSharedState(persistedState).catch(() => {
+    console.info('[supabase-sync] Local state changed; pushing update to Supabase.')
+    void writeSharedState(nextState).catch(() => {
       setSharedSyncEnabled(false)
     })
-  }, [bracketMatches, lockedPools, poolMatches, sharedStateReady, sharedSyncEnabled, teams])
+  }, [
+    debouncedBracketMatches,
+    debouncedPoolMatches,
+    lockedPools,
+    sharedStateReady,
+    sharedSyncEnabled,
+    teams,
+  ])
 
   useEffect(() => {
     let isActive = true
@@ -403,6 +429,10 @@ function App() {
 
       setSharedSyncEnabled(result.available)
       setSharedStateReady(true)
+
+      console.info(
+        `[supabase-sync] Initial sync ${result.available ? 'connected to Supabase' : 'unavailable'}.`,
+      )
 
       if (!result.state) {
         return
@@ -420,34 +450,14 @@ function App() {
   }, [])
 
   useEffect(() => {
-    function syncFromStorage() {
-      const persistedState = readPersistedState()
-
-      if (!persistedState) {
-        return
-      }
-
-      lastSyncedStateRef.current = JSON.stringify(persistedState)
-      applyPersistedState(persistedState)
-    }
-
-    function handleStorage(event: StorageEvent) {
-      if (event.key && event.key !== storageKey) {
-        return
-      }
-
-      syncFromStorage()
-    }
-
-    window.addEventListener('storage', handleStorage)
-
-    if (!sharedSyncEnabled) {
-      return () => window.removeEventListener('storage', handleStorage)
+    if (!sharedStateReady || !sharedSyncEnabled) {
+      return
     }
 
     const intervalId = window.setInterval(() => {
       void readSharedState().then((result) => {
         if (!result.available) {
+          console.warn('[supabase-sync] Polling lost Supabase access; stopping shared sync.')
           setSharedSyncEnabled(false)
           return
         }
@@ -462,16 +472,16 @@ function App() {
           return
         }
 
+        console.info('[supabase-sync] Pulled newer tournament state from Supabase.')
         lastSyncedStateRef.current = serializedState
         applyPersistedState(result.state)
       })
     }, sharedRefreshIntervalMs)
 
     return () => {
-      window.removeEventListener('storage', handleStorage)
       window.clearInterval(intervalId)
     }
-  }, [sharedSyncEnabled])
+  }, [sharedStateReady, sharedSyncEnabled])
 
   const poolStandings = useMemo(() => {
     const entries = Object.entries(teams) as [PoolKey, Team[]][]
@@ -672,6 +682,30 @@ function App() {
     }))
   }
 
+  function updateDraftTeamName(poolKey: PoolKey, teamId: string, name: string) {
+    if (lockedPools[poolKey]) {
+      return
+    }
+
+    setDraftTeams((current) => ({
+      ...current,
+      [poolKey]: current[poolKey].map((team) =>
+        team.id === teamId ? { ...team, name } : team,
+      ),
+    }))
+  }
+
+  function commitDraftTeamName(poolKey: PoolKey, teamId: string) {
+    const savedTeam = teams[poolKey].find((team) => team.id === teamId)
+    const draftTeam = draftTeams[poolKey].find((team) => team.id === teamId)
+
+    if (!savedTeam || !draftTeam || savedTeam.name === draftTeam.name) {
+      return
+    }
+
+    updateTeamName(poolKey, teamId, draftTeam.name)
+  }
+
   function togglePoolLock(poolKey: PoolKey) {
     setLockedPools((current) => ({
       ...current,
@@ -714,6 +748,20 @@ function App() {
     )
   }
 
+  if (!sharedStateReady) {
+    return (
+      <main className="app-shell loading-shell">
+        <section className="loading-card">
+          <p className="panel-kicker">Loading</p>
+          <h2>Fetching Tournament Data</h2>
+          <p className="panel-note">
+            Waiting for the latest tournament state from Supabase before opening the board.
+          </p>
+        </section>
+      </main>
+    )
+  }
+
   return (
     <main className="app-shell">
       {activePage === 'reporting' ? (
@@ -750,11 +798,17 @@ function App() {
                         <span>{team.id.toUpperCase()}</span>
                         <input
                           type="text"
-                          value={team.name}
+                          value={draftTeams[poolKey].find((draftTeam) => draftTeam.id === team.id)?.name ?? team.name}
                           disabled={lockedPools[poolKey]}
                           onChange={(event) =>
-                            updateTeamName(poolKey, team.id, event.target.value)
+                            updateDraftTeamName(poolKey, team.id, event.target.value)
                           }
+                          onBlur={() => commitDraftTeamName(poolKey, team.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.currentTarget.blur()
+                            }
+                          }}
                         />
                       </label>
                     ))}
