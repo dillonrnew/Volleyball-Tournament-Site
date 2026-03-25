@@ -45,10 +45,6 @@ type PoolStanding = {
   pointDiff: number
 }
 
-type SeededTeam = PoolStanding & {
-  seed: number
-}
-
 type PersistedState = {
   teams: Record<PoolKey, Team[]>
   lockedPools: Record<PoolKey, boolean>
@@ -57,7 +53,7 @@ type PersistedState = {
 }
 
 const bracketScoreOptions = ['0', '1', '2'] as const
-const scoreSyncDebounceMs = 700
+const poolScoreSyncDebounceMs = 700
 const sharedRefreshIntervalMs = 15000
 const tournamentRowId = 'current'
 
@@ -170,7 +166,7 @@ const initialBracketMatches: Match[] = [
     label: 'Semifinal 1',
     stage: 'Semifinal',
     teamAId: 'seed1',
-    teamBId: 'winner-quarter-2',
+    teamBId: 'winner-quarter-1',
     scoreA: '0',
     scoreB: '0',
   },
@@ -179,7 +175,7 @@ const initialBracketMatches: Match[] = [
     label: 'Semifinal 2',
     stage: 'Semifinal',
     teamAId: 'seed2',
-    teamBId: 'winner-quarter-1',
+    teamBId: 'winner-quarter-2',
     scoreA: '0',
     scoreB: '0',
   },
@@ -197,7 +193,7 @@ const initialBracketMatches: Match[] = [
     label: 'Consolation Semifinal 1',
     stage: 'Consolation',
     teamAId: 'loser-quarter-1',
-    teamBId: 'loser-semifinal-1',
+    teamBId: 'loser-semifinal-2',
     scoreA: '0',
     scoreB: '0',
   },
@@ -206,7 +202,7 @@ const initialBracketMatches: Match[] = [
     label: 'Consolation Semifinal 2',
     stage: 'Consolation',
     teamAId: 'loser-quarter-2',
-    teamBId: 'loser-semifinal-2',
+    teamBId: 'loser-semifinal-1',
     scoreA: '0',
     scoreB: '0',
   },
@@ -247,10 +243,10 @@ function getMatchOutcome(match: Match) {
 }
 
 function compareStandings(a: PoolStanding, b: PoolStanding) {
-  if (b.wins !== a.wins) return b.wins - a.wins
-  if (b.setsWon !== a.setsWon) return b.setsWon - a.setsWon
-  if (a.setsLost !== b.setsLost) return a.setsLost - b.setsLost
-  if (b.pointDiff !== a.pointDiff) return b.pointDiff - a.pointDiff
+  const matchPointsA = a.wins * 2 + a.ties
+  const matchPointsB = b.wins * 2 + b.ties
+
+  if (matchPointsB !== matchPointsA) return matchPointsB - matchPointsA
   if (b.pointsFor !== a.pointsFor) return b.pointsFor - a.pointsFor
   return a.name.localeCompare(b.name)
 }
@@ -344,10 +340,10 @@ function App() {
   const [poolMatches, setPoolMatches] = useState(initialPoolMatches)
   const [bracketMatches, setBracketMatches] = useState(initialBracketMatches)
   const [debouncedPoolMatches, setDebouncedPoolMatches] = useState(initialPoolMatches)
-  const [debouncedBracketMatches, setDebouncedBracketMatches] = useState(initialBracketMatches)
   const [sharedSyncEnabled, setSharedSyncEnabled] = useState(false)
   const [sharedStateReady, setSharedStateReady] = useState(false)
   const lastSyncedStateRef = useRef<string | null>(null)
+  const previousSeedOrderRef = useRef<string | null>(null)
 
   function applyPersistedState(state: PersistedState) {
     setTeams(state.teams)
@@ -356,7 +352,6 @@ function App() {
     setPoolMatches(state.poolMatches)
     setBracketMatches(state.bracketMatches)
     setDebouncedPoolMatches(state.poolMatches)
-    setDebouncedBracketMatches(state.bracketMatches)
   }
 
   useEffect(() => {
@@ -371,25 +366,17 @@ function App() {
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       setDebouncedPoolMatches(poolMatches)
-    }, scoreSyncDebounceMs)
+    }, poolScoreSyncDebounceMs)
 
     return () => window.clearTimeout(timeoutId)
   }, [poolMatches])
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setDebouncedBracketMatches(bracketMatches)
-    }, scoreSyncDebounceMs)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [bracketMatches])
 
   useEffect(() => {
     const nextState: PersistedState = {
       teams,
       lockedPools,
       poolMatches: debouncedPoolMatches,
-      bracketMatches: debouncedBracketMatches,
+      bracketMatches,
     }
 
     const serializedState = JSON.stringify(nextState)
@@ -409,8 +396,8 @@ function App() {
       setSharedSyncEnabled(false)
     })
   }, [
-    debouncedBracketMatches,
     debouncedPoolMatches,
+    bracketMatches,
     lockedPools,
     sharedStateReady,
     sharedSyncEnabled,
@@ -482,6 +469,28 @@ function App() {
       window.clearInterval(intervalId)
     }
   }, [sharedStateReady, sharedSyncEnabled])
+
+  useEffect(() => {
+    if (!sharedStateReady || !sharedSyncEnabled || activePage !== 'bracket') {
+      return
+    }
+
+    void readSharedState().then((result) => {
+      if (!result.available || !result.state) {
+        return
+      }
+
+      const serializedState = JSON.stringify(result.state)
+
+      if (serializedState === lastSyncedStateRef.current) {
+        return
+      }
+
+      console.info('[supabase-sync] Bracket page opened; pulled latest tournament state.')
+      lastSyncedStateRef.current = serializedState
+      applyPersistedState(result.state)
+    })
+  }, [activePage, sharedStateReady, sharedSyncEnabled])
 
   const poolStandings = useMemo(() => {
     const entries = Object.entries(teams) as [PoolKey, Team[]][]
@@ -575,26 +584,25 @@ function App() {
     const poolAComplete = poolMatches.poolA.every(isPoolMatchComplete)
     const poolBComplete = poolMatches.poolB.every(isPoolMatchComplete)
 
-    const topSeeds: SeededTeam[] = []
-    if (poolAComplete && poolA[0]) {
-      topSeeds.push({ ...poolA[0], seed: 1 })
-    }
-    if (poolBComplete && poolB[0]) {
-      topSeeds.push({ ...poolB[0], seed: 2 })
+    if (!(poolAComplete && poolBComplete)) {
+      return []
     }
 
-    const atLarge =
-      poolAComplete && poolBComplete
-        ? [poolA[1], poolA[2], poolB[1], poolB[2]]
-            .filter((team): team is PoolStanding => Boolean(team))
-            .sort(compareStandings)
-            .map((team, index) => ({
-              ...team,
-              seed: index + 3,
-            }))
-        : []
+    const seededPlacements: Array<[PoolStanding | undefined, number]> = [
+      [poolA[0], 1],
+      [poolB[0], 2],
+      [poolB[1], 3],
+      [poolA[1], 4],
+      [poolB[2], 5],
+      [poolA[2], 6],
+    ]
 
-    return [...topSeeds, ...atLarge]
+    return seededPlacements
+      .filter((entry): entry is [PoolStanding, number] => Boolean(entry[0]))
+      .map(([team, seed]) => ({
+        ...team,
+        seed,
+      }))
   }, [poolMatches, poolStandings])
 
   const teamNameById = useMemo(() => {
@@ -613,6 +621,35 @@ function App() {
       ...fromSeeds,
     }
   }, [seeds, teams])
+
+  useEffect(() => {
+    if (!sharedStateReady) {
+      return
+    }
+
+    const currentSeedOrder = JSON.stringify(
+      seeds.map((team) => ({
+        seed: team.seed,
+        teamId: team.teamId,
+      })),
+    )
+
+    if (previousSeedOrderRef.current === null) {
+      previousSeedOrderRef.current = currentSeedOrder
+      return
+    }
+
+    if (previousSeedOrderRef.current === currentSeedOrder) {
+      return
+    }
+
+    previousSeedOrderRef.current = currentSeedOrder
+
+    console.info('[supabase-sync] Seed order changed; clearing bracket results.')
+    window.setTimeout(() => {
+      setBracketMatches(initialBracketMatches)
+    }, 0)
+  }, [seeds, sharedStateReady])
 
   const bracketContext = useMemo(() => {
     const outcomes = new Map<string, ReturnType<typeof getMatchOutcome>>()
@@ -668,6 +705,28 @@ function App() {
 
     return { champion, runnerUp, third }
   }, [bracketContext, bracketMatches])
+
+  const reportingBracketMatches = useMemo(() => {
+    const championshipMatch = bracketMatches.find((match) => match.id === 'championship')
+    const remainingMatches = bracketMatches.filter((match) => match.id !== 'championship')
+
+    return championshipMatch ? [...remainingMatches, championshipMatch] : bracketMatches
+  }, [bracketMatches])
+
+  const medalLabelByTeam = useMemo(() => {
+    const entries = [
+      placements.champion ? [placements.champion, '🥇'] : null,
+      placements.runnerUp ? [placements.runnerUp, '🥈'] : null,
+      placements.third ? [placements.third, '🥉'] : null,
+    ].filter((entry): entry is [string, string] => Boolean(entry))
+
+    return Object.fromEntries(entries)
+  }, [placements])
+
+  function formatBracketTeamName(name: string) {
+    const medal = medalLabelByTeam[name]
+    return medal ? `${medal} ${name}` : name
+  }
 
   function updateTeamName(poolKey: PoolKey, teamId: string, name: string) {
     if (lockedPools[poolKey]) {
@@ -914,14 +973,16 @@ function App() {
             </div>
 
             <div className="bracket-report-grid">
-              {bracketMatches.map((match) => (
+              {reportingBracketMatches.map((match) => (
                 <article className="match-card" key={match.id}>
                   <div className="match-meta">
                     <strong>{match.label}</strong>
                     <span>{match.stage}</span>
                   </div>
                   <div className="bracket-report-row">
-                    <div className="bracket-report-team">{bracketContext.resolveSlot(match.teamAId)}</div>
+                    <div className="bracket-report-team">
+                      {formatBracketTeamName(bracketContext.resolveSlot(match.teamAId))}
+                    </div>
                     <div className="bracket-score-picker" aria-label={`${match.label} score picker`}>
                       <div className="bracket-score-options" role="radiogroup" aria-label={`${bracketContext.resolveSlot(match.teamAId)} score`}>
                         {[...bracketScoreOptions].reverse().map((score) => (
@@ -951,7 +1012,9 @@ function App() {
                         ))}
                       </div>
                     </div>
-                    <div className="bracket-report-team">{bracketContext.resolveSlot(match.teamBId)}</div>
+                    <div className="bracket-report-team">
+                      {formatBracketTeamName(bracketContext.resolveSlot(match.teamBId))}
+                    </div>
                   </div>
                 </article>
               ))}
@@ -1023,15 +1086,19 @@ function App() {
                 <div className="results-stack">
                   <div>
                     <span>Champion</span>
-                    <strong>{placements.champion ?? 'TBD'}</strong>
+                    <strong>
+                      {placements.champion ? formatBracketTeamName(placements.champion) : 'TBD'}
+                    </strong>
                   </div>
                   <div>
                     <span>Runner-Up</span>
-                    <strong>{placements.runnerUp ?? 'TBD'}</strong>
+                    <strong>
+                      {placements.runnerUp ? formatBracketTeamName(placements.runnerUp) : 'TBD'}
+                    </strong>
                   </div>
                   <div>
                     <span>Third</span>
-                    <strong>{placements.third ?? 'TBD'}</strong>
+                    <strong>{placements.third ? formatBracketTeamName(placements.third) : 'TBD'}</strong>
                   </div>
                 </div>
               </section>
@@ -1040,7 +1107,7 @@ function App() {
             <section className="board-bracket">
               <BracketGraphic
                 bracketMatches={bracketMatches}
-                resolveSlot={bracketContext.resolveSlot}
+                resolveSlot={(slotId) => formatBracketTeamName(bracketContext.resolveSlot(slotId))}
               />
             </section>
           </div>
